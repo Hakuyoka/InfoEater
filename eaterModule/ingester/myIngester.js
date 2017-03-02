@@ -1,4 +1,6 @@
 /**
+ *
+ * オレオレ
  * Created by kotato on 2017/02/28.
  */
 
@@ -6,16 +8,16 @@
  * node-mongodbのドキュメント
  * http://mongodb.github.io/node-mongodb-native/2.1/
  */
-var db;
-var MongoClient = require('mongodb').MongoClient;
-var assert = require('assert');
-var name = "resource"
+let db;
+let MongoClient = require('mongodb').MongoClient;
+let assert = require('assert');
+let name = "resource"
 
 // Connection URL
-var url = 'mongodb://localhost:27017/infoEater';
+let url = 'mongodb://localhost:27017/infoEater';
 
 
-var collection = function( name ){
+let collection = function( name ){
     return db.collection( name );
 };
 
@@ -31,11 +33,16 @@ new Promise((resolve,reject)=>{
     });
 
 }).then(()=>{
-    console.log("then")
     let mongo = function () {
         return {
-            find: (query)=>{
-                return collection(name).findOne({user: "hakuyoka"})
+            find: ()=>{
+                return  new Promise((resolve,reject)=>{
+                    collection(name).find({user: "hakuyoka"})
+                        .toArray((err, docs)=>{
+                            assert.equal(err, null);
+                            resolve(docs)
+                        })
+                })
             },
 
             update: (body)=>{
@@ -58,23 +65,77 @@ new Promise((resolve,reject)=>{
 
     new myIngester()
     console.log(mongo)
-    var wordMap = mongo.find()
-        .then((data)=>{
-        return data.resource[0].data
-            .reduce((map, val)=>{
-                if(map[val]){
-                    map[val] = map[val] + 1
-                }else{
-                    map[val] = 1
-                }
-                return map
-            },[])
+    mongo.find()
+        .then((docs)=>{
+            return docs.map((doc)=> {
+                //データの配列
+                let arr = doc.resource.data
+                //出現回数の合計
+                let wordTotal = 0
+                //各単語の出現率
+                let wordArray;
+                wordArray = arr.reduce((arr, val) => {
+                    //レガシー感がする直したい
+                    let isExist = false
+
+                    let target;
+                    let word;
+                    //参照透過がキエルゥゥ。でも、参照は欲しい
+                    for (let index in arr) {
+                        target = arr[index];
+                        word = target.word;
+                        if (word === val) {
+                            target.num++
+                            isExist = true
+                            break
+                        }
+                    }
+                    if (!isExist) {
+                        arr.push({word: val, num: 1})
+                    }
+                    wordTotal++
+                    return arr
+                }, []);
+
+                return {wordArray: wordArray, totalWordNum:wordTotal, url:doc.url}
+            })
+
         })
-        .then(console.log)
+        .then(tfDif)
+        .then((results)=>{
+            results.map((result)=>{
+                console.log(result.url)
+                result.words.filter((word)=>{
+                    return word.tfidf > 0.04
+                })
+                    .map((result)=>{
+                        console.log(result)
+                    })
+            })
+        })
 
+    function tfDif(wordMaps) {
+        return wordMaps.map((wordMap)=>{
+            let totalWordNum = wordMap.totalWordNum
+            let wordArray = wordMap.wordArray
+            let totalMapLength = wordMaps.length
+            return{url:wordMap.url,
+                words: wordArray.map((word)=>{
+                 let tf = word.num / totalWordNum
+                 let idf = Math.log(totalMapLength/countDocumentHaving(word.word))
+                 // console.log(word.word,tf,idf)
+                 return {word:word.word,tf:tf,idf:idf, tfidf:tf*idf}
+            })}
+        })
 
-    function collect(data) {
+        function countDocumentHaving(word) {
 
+            return wordMaps.filter((wordMap)=>{
+                return wordMap.wordArray.some((map)=>{
+                    return word === map.word
+                })
+            }).length
+        }
     }
 
 })
