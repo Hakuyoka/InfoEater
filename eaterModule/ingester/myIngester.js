@@ -66,6 +66,7 @@ new Promise((resolve,reject)=>{
     new myIngester()
     console.log(mongo)
     mongo.find()
+
         .then((docs)=>{
             return docs.map((doc)=> {
                 //データの配列
@@ -101,45 +102,26 @@ new Promise((resolve,reject)=>{
             })
 
         })
-        .then(tfDif)
+        .then(langUtisl.tfDif)
         .then((results)=>{
-            results.map((result)=>{
-                console.log(result.url)
-                result.words.filter((word)=>{
-                    return word.tfidf > 0.04
-                })
-                    .map((result)=>{
-                        console.log(result)
+            var vectors = langUtisl.makeVector(results)
+            kmeans.clusterize(vectors, {k: 2}, (err,res) => {
+                if (err) console.error(err);
+                else {
+                    res.map((val)=>{
+                        console.log(val.clusterInd)
+                        val.clusterInd.map(index=>{
+                            console.log(results[index].url)
+                        })
                     })
-            })
+                }
+            });
         })
 
-    function tfDif(wordMaps) {
-        return wordMaps.map((wordMap)=>{
-            let totalWordNum = wordMap.totalWordNum
-            let wordArray = wordMap.wordArray
-            let totalMapLength = wordMaps.length
-            return{url:wordMap.url,
-                words: wordArray.map((word)=>{
-                 let tf = word.num / totalWordNum
-                 let idf = Math.log(totalMapLength/countDocumentHaving(word.word))
-                 // console.log(word.word,tf,idf)
-                 return {word:word.word,tf:tf,idf:idf, tfidf:tf*idf}
-            })}
-        })
-
-        function countDocumentHaving(word) {
-
-            return wordMaps.filter((wordMap)=>{
-                return wordMap.wordArray.some((map)=>{
-                    return word === map.word
-                })
-            }).length
-        }
-    }
 
 })
-
+const kmeans = require('node-kmeans');
+const langUtisl = require('../utils/natunalLanguageUtil');
 
 //
 //
